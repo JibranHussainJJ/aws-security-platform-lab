@@ -2,8 +2,19 @@
 
 This project demonstrates a cloud-native security monitoring pipeline using AWS and Kubernetes.
 
+
 ## Architecture
-CloudTrail → CloudWatch Logs → Metric Filters → SNS Alerts
+
+AWS-based security monitoring pipeline:
+
+CloudTrail → CloudWatch Logs → Lambda → SNS → Email Alerts
+
+### Components
+
+- aws/lambda → Detection engine
+- aws/cloudwatch → Metrics and alarms
+- aws/sns → Alert delivery
+
 
 ## Progress
 - [x] CloudTrail setup
