@@ -21,4 +21,4 @@ CloudTrail → CloudWatch Logs → Lambda → SNS → Email Alerts
 - [x] CloudWatch logs
 - [x] Metric filters
 - [ ] GuardDuty
-- [ ] Falco
+- [ ] CloudWatch Dashboards
