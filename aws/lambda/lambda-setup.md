@@ -2,9 +2,12 @@
 
 ## Overview
 
-This Lambda function processes CloudTrail events from CloudWatch Logs and applies custom security detections for high-risk AWS activity.
+This Lambda function processes two event sources:
 
-It is designed to reduce noise by using threshold-based alerting and to send notifications through SNS when detection thresholds are exceeded.
+1. CloudTrail events delivered through CloudWatch Logs
+2. GuardDuty findings delivered through EventBridge
+
+It applies custom security detections and sends alerts through SNS.
 
 ---
 
@@ -14,61 +17,46 @@ It is designed to reduce noise by using threshold-based alerting and to send not
 
 ---
 
-## Purpose
-
-The Lambda detection engine extends beyond basic CloudWatch metric filters by allowing:
-
-- custom rule logic
-- multiple detections in one function
-- threshold-based suppression to reduce alert fatigue
-- richer alert payloads
-
----
-
 ## Architecture
 
-CloudTrail → CloudWatch Logs → Lambda → SNS → Email Alerts
+### CloudTrail path
+CloudTrail → CloudWatch Logs → Lambda → SNS
+
+### GuardDuty path
+GuardDuty → EventBridge → Lambda → SNS
 
 ---
 
-## Detection Rules Implemented
+## Detection Rules
 
-The Lambda function currently detects:
-
+### CloudTrail / IAM detections
 - CreateUser
 - DeleteTrail
 - StopLogging
 - AssumeRole
 - PutUserPolicy
-- AttachUserPolicy with `AdministratorAccess`
+- AttachUserPolicy with AdministratorAccess
 - CreateAccessKey
 - Root account usage
 - Failed console login attempts
+
+### GuardDuty detections
+- GuardDuty findings are forwarded directly from EventBridge
+- Lambda publishes GuardDuty finding details to SNS
 
 ---
 
 ## Threshold Logic
 
-This Lambda is configured to reduce noisy alerting.
+For CloudTrail detections, Lambda groups detections by rule name and only sends SNS alerts when the same rule occurs more than `ALERT_THRESHOLD` times in a single Lambda invocation batch.
 
-Current behavior:
+This reduces alert noise.
 
-- detections are grouped by rule name
-- SNS alerts are sent only when the same rule occurs more than `ALERT_THRESHOLD` times in a single Lambda invocation batch
-
-Example:
-
-- if `ALERT_THRESHOLD = 5`
-- then 6 matching events in the same batch will trigger an alert
-- 5 or fewer matching events will not trigger an alert
-
-Note: this implementation does **not** maintain state across separate Lambda invocations.
+Note: this version does not maintain state across separate Lambda invocations.
 
 ---
 
 ## Environment Variables
-
-The function uses the following environment variables:
 
 - `SNS_TOPIC_ARN`
 - `ALERT_THRESHOLD`
@@ -85,67 +73,39 @@ The function uses the following environment variables:
 The Lambda execution role requires:
 
 - `sns:Publish`
-- CloudWatch Logs permissions through `AWSLambdaBasicExecutionRole`
+- CloudWatch Logs permissions via `AWSLambdaBasicExecutionRole`
 
 ---
 
 ## Trigger Configuration
 
-Lambda is triggered by a CloudWatch Logs subscription filter connected to CloudTrail logs.
+### CloudTrail trigger
+CloudWatch Logs subscription filter connected to CloudTrail logs
 
-This allows CloudTrail events to be forwarded automatically to the function for processing.
-
----
-
-## Supported Input Types
-
-The function currently supports:
-
-1. CloudWatch Logs subscription events  
-2. Direct Lambda test events with a single CloudTrail-style record  
-3. Direct Lambda test events using a `records` array  
-
-This makes testing easier during development.
+### GuardDuty trigger
+EventBridge rule with pattern:
+- source = `aws.guardduty`
+- detail-type = `GuardDuty Finding`
 
 ---
 
-## Testing Approach
+## Testing
 
-The function was tested using manual Lambda test events containing repeated CloudTrail-style records.
+### CloudTrail testing
+Supports:
+- CloudWatch Logs subscription events
+- direct Lambda test events
+- `records` array test events
 
-Example test strategy:
-
-- send 6 `CreateUser` events in a single `records` array
-- verify that the threshold logic triggers SNS alerting
-
----
-
-## Alerting Behavior
-
-When the threshold is exceeded, Lambda:
-
-1. groups matching detections
-2. builds a JSON alert payload
-3. publishes the alert to SNS
-4. sends the notification to the configured email subscriber
+### GuardDuty testing
+Supports:
+- sample findings generated in GuardDuty
+- EventBridge delivery to Lambda
 
 ---
 
 ## Design Notes
 
-- Lambda-based detections provide more flexibility than metric filters alone
-- threshold-based logic reduces repetitive alerting
-- the current version is suitable for batch-based suppression
-- a future version could use DynamoDB for true time-window tracking across invocations
-
----
-
-## Future Improvements
-
-Potential future enhancements:
-
-- add DynamoDB-backed rolling time windows
-- add severity-based routing
-- integrate with Slack or PagerDuty
-- forward findings to Loki or Elasticsearch
-- enrich alerts with user and account context
+- Lambda provides more flexible detection logic than metric filters alone
+- GuardDuty integration adds managed AWS threat detection
+- SNS provides a unified alerting path for both custom and managed detections

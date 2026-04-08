@@ -130,12 +130,6 @@ def evaluate_record(record: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def extract_records(event: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Supports:
-    1. Real CloudWatch Logs subscription events
-    2. Direct manual Lambda test with a single CloudTrail-like record
-    3. Direct manual Lambda test with {"records": [ ... ]}
-    """
     if "awslogs" in event:
         compressed_payload = base64.b64decode(event["awslogs"]["data"])
         uncompressed_payload = gzip.decompress(compressed_payload)
@@ -174,9 +168,39 @@ def format_threshold_alert_message(grouped_alerts: Dict[str, Dict[str, Any]]) ->
     )
 
 
+def format_guardduty_message(detail: Dict[str, Any]) -> str:
+    payload = {
+        "source": "GuardDuty",
+        "severity": detail.get("severity"),
+        "type": detail.get("type"),
+        "title": detail.get("title"),
+        "description": detail.get("description"),
+        "region": detail.get("region"),
+        "accountId": detail.get("accountId"),
+        "resource": detail.get("resource"),
+    }
+    return json.dumps(payload, indent=2, default=str)
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info("Received event: %s", json.dumps(event))
 
+    # GuardDuty via EventBridge
+    if event.get("source") == "aws.guardduty" and event.get("detail-type") == "GuardDuty Finding":
+        detail = event.get("detail", {})
+        publish_sns(
+            subject="AWS Security Alert - GuardDuty Finding",
+            message=format_guardduty_message(detail)
+        )
+        logger.info("Processed GuardDuty finding")
+        return {
+            "statusCode": 200,
+            "mode": "guardduty",
+            "finding_type": detail.get("type"),
+            "severity": detail.get("severity"),
+        }
+
+    # CloudTrail / CloudWatch logs path
     records = extract_records(event)
 
     grouped_counts: Dict[str, int] = {}
@@ -214,6 +238,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     return {
         "statusCode": 200,
+        "mode": "cloudtrail",
         "record_count": len(records),
         "processed_detections": processed_detections,
         "grouped_counts": grouped_counts,

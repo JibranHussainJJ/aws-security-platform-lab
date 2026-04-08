@@ -1,24 +1,40 @@
-# AWS Cloud Security Monitoring + Kubernetes Runtime Security
+# CloudWatch Security Dashboard
 
-This project demonstrates a cloud-native security monitoring pipeline using AWS and Kubernetes.
+## Overview
 
+A CloudWatch dashboard was created to monitor security activity.
+
+---
+
+## Metrics Included
+
+- Lambda Invocations (Detection activity)
+- Lambda Errors (System health)
+- SNS Messages Published (Alert volume)
+
+---
+
+## Logs Insights
+
+Used to display:
+
+- Recent security events
+- GuardDuty findings
+- Detection activity
+
+---
+
+## Purpose
+
+Provides real-time visibility into:
+
+- Security detections
+- Alerting pipeline
+- System performance
+
+---
 
 ## Architecture
 
-AWS-based security monitoring pipeline:
-
-CloudTrail → CloudWatch Logs → Lambda → SNS → Email Alerts
-
-### Components
-
-- aws/lambda → Detection engine
-- aws/cloudwatch → Metrics and alarms
-- aws/sns → Alert delivery
-
-
-## Progress
-- [x] CloudTrail setup
-- [x] CloudWatch logs
-- [x] Metric filters
-- [ ] GuardDuty
-- [ ] CloudWatch Dashboards
+CloudTrail → CloudWatch → Lambda → SNS  
+GuardDuty → EventBridge → Lambda → SNS
